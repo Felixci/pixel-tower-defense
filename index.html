@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>像素塔防 Pixel Tower Defense</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #14161f;
+    color: #e8e8f0;
+    font-family: "Courier New", Consolas, monospace;
+    min-height: 100%;
+    -webkit-font-smoothing: none;
+  }
+  #app {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 12px;
+  }
+  h1 {
+    font-size: 20px;
+    letter-spacing: 2px;
+    margin: 6px 0 10px;
+    text-align: center;
+    color: #7ee081;
+    text-shadow: 2px 2px 0 #1d3a22;
+  }
+  #hud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .chip {
+    background: #232838;
+    border: 2px solid #3a4258;
+    padding: 4px 10px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip b { color: #ffd166; }
+  #stageWrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #1b2030;
+    border: 3px solid #3a4258;
+    border-radius: 4px;
+    max-width: 100%;
+    height: auto;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    background: rgba(10,12,18,0.86);
+    text-align: center;
+    padding: 20px;
+    border-radius: 4px;
+  }
+  #overlay.show { display: flex; }
+  #overlay h2 { margin: 0 0 10px; font-size: 26px; letter-spacing: 3px; }
+  #overlay p { margin: 4px 0; font-size: 14px; color: #b9c0d4; }
+  #towerBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  .tcard {
+    width: 118px;
+    background: #232838;
+    border: 2px solid #3a4258;
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform .06s;
+  }
+  .tcard:hover { transform: translateY(-2px); }
+  .tcard.sel { border-color: #7ee081; box-shadow: 0 0 0 2px #2d5a35 inset; }
+  .tcard.dis { opacity: .45; cursor: not-allowed; }
+  .tcard .tname { font-size: 13px; font-weight: bold; }
+  .tcard .tcost { font-size: 12px; color: #ffd166; }
+  .tcard .tdesc { font-size: 11px; color: #98a0b8; line-height: 1.35; margin-top: 2px; }
+  .tcard canvas { border: none; background: transparent; display: block; margin: 0 auto 3px; }
+  #ctrl {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 7px 16px;
+    background: #2f6b3a;
+    color: #eafff0;
+    border: 2px solid #4a9b58;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:hover { background: #3a8248; }
+  button.alt { background: #3a4258; border-color: #5a6480; }
+  button.alt:hover { background: #4a5470; }
+  #log {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #8f97ad;
+    text-align: center;
+    min-height: 18px;
+  }
+  #help {
+    margin-top: 14px;
+    font-size: 12px;
+    color: #7d859c;
+    line-height: 1.7;
+    border-top: 1px dashed #333a4d;
+    padding-top: 10px;
+  }
+  #help b { color: #b9c0d4; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>PIXEL TOWER DEFENSE</h1>
+  <div id="hud">
+    <div class="chip">💰 金币 <b id="uiGold">0</b></div>
+    <div class="chip">❤️ 生命 <b id="uiLife">0</b></div>
+    <div class="chip">🌊 波次 <b id="uiWave">0/0</b></div>
+    <div class="chip">👾 剩余 <b id="uiLeft">0</b></div>
+    <div class="chip">🏰 已建 <b id="uiTowers">0</b></div>
+  </div>
+  <div id="stageWrap">
+    <canvas id="cv" width="960" height="540"></canvas>
+    <div id="overlay">
+      <h2 id="ovTitle">标题</h2>
+      <p id="ovText">说明</p>
+      <div id="ctrl2" style="margin-top:14px"></div>
+    </div>
+  </div>
+  <div id="towerBar"></div>
+  <div id="ctrl">
+    <button id="btnStart">▶ 开始游戏</button>
+    <button id="btnNext" class="alt">⏩ 提前召唤下一波</button>
+    <button id="btnSell" class="alt">🗑 出售模式</button>
+    <button id="btnSpeed" class="alt">⏩ 速度 x1</button>
+    <button id="btnRestart" class="alt">🔄 重新开始</button>
+  </div>
+  <div id="log">提示：先点击下方防御塔卡片，再点击地图上的可建造格子放置。</div>
+  <div id="help">
+    <b>玩法：</b>敌人从左侧 3 条路线出发，沿路径走向右侧的基地。在路径旁的草地上建造防御塔拦截它们，漏怪会扣生命，生命归零即失败。<br>
+    <b>操作：</b>① 点塔卡片选中 → ② 点地图草地格子建造 → ③ 点已建塔可查看/升级/出售。按 <b>空格</b> 暂停，按 <b>1~4</b> 快速选塔。<br>
+    <b>提示：</b>塔可以升级（提升伤害与射程），后期敌人更强，注意金币分配与多路线布防。
+  </div>
+</div>
+<script>
+"use strict";
+/* =========================================================
+   像素塔防 Pixel Tower Defense
+   单文件实现，无外部依赖，Canvas 像素风渲染
+   ========================================================= */
+/* ---------------- 基础配置 ---------------- */
+const CELL = 60;                 // 像素格子大小
+const COLS = 16;                 // 横向格子数
+const ROWS = 9;                  // 纵向格子数
+const W = COLS * CELL;           // 960
+const H = ROWS * CELL;           // 540
+const T_EMPTY = 0;               // 草地（可建造）
+const T_PATH  = 1;               // 路径（不可建造）
+const T_BLOCK = 2;               // 装饰障碍（不可建造）
+/* ---------------- 路线定义（3 条） ----------------
+   每条路线用格子坐标点描述，敌人沿折线行走。
+   起点在左边界外，终点在右边界（基地）。
+--------------------------------------------------- */
+const ROUTES_DEF = [
+  // 路线 1：上方
+  [[-1,1],[3,1],[3,3],[7,3],[7,1],[11,1],[11,4],[16,4]],
+  // 路线 2：中间
+  [[-1,4],[2,4],[2,6],[6,6],[6,4],[10,4],[10,6],[13,6],[13,4],[16,4]],
+  // 路线 3：下方
+  [[-1,7],[4,7],[4,5],[8,5],[8,7],[12,7],[12,5],[16,5]]
+];
+/* ---------------- 防御塔类型 ---------------- */
+const TOWER_TYPES = [
+  {
+    id: 'arrow',
+    name: '箭塔',
+    cost: 50,
+    color: '#7ee081',
+    color2: '#2f6b3a',
+    desc: '射速快 · 单体',
+    range: 2.4,
+    dmg: 9,
+    cd: 0.42,
+    bullet: 5.2,
+    bulletColor: '#d9ffd9'
+  },
+  {
+    id: 'cannon',
+    name: '炮塔',
+    cost: 90,
+    color: '#ffb454',
+    color2: '#8a5a12',
+    desc: '范围溅射 · 慢',
+    range: 2.1,
+    dmg: 22,
+    cd: 1.15,
+    bullet: 4.0,
+    bulletColor: '#ffd9a0',
+    splash: 1.15          // 溅射半径（格）
+  },
+  {
+    id: 'frost',
+    name: '冰塔',
+    cost: 70,
+    color: '#6ec6ff',
+    color2: '#1f4f7a',
+    desc: '减速 · 低伤',
+    range: 2.2,
+    dmg: 5,
+    cd: 0.7,
+    bullet: 5.6,
+    bulletColor: '#cdefff',
+    slow: 0.45,           // 减速比例
+    slowTime: 1.6         // 减速持续时间（秒）
+  },
+  {
+    id: 'laser',
+    name: '激光塔',
+    cost: 130,
+    color: '#ff6ec7',
+    color2: '#7a1f5a',
+    desc: '高伤 · 穿透直线',
+    range: 3.0,
+    dmg: 16,
+    cd: 0.95,
+    bullet: 0,
+    beam: true,           // 光束型攻击
+    pierce: true
+  }
+];
+/* ---------------- 敌人类型 ---------------- */
+const ENEMY_TYPES = {
+  slime:   { name:'史莱姆', hp:42,  speed:1.05, gold:8,  color:'#7ee081', color2:'#2f6b3a', size:0.30, armor:0 },
+  bat:     { name:'蝙蝠',   hp:30,  speed:1.85, gold:7,  color:'#c58cff', color2:'#5a2f8a', size:0.26, armor:0 },
+  golem:   { name:'石魔',   hp:150, speed:0.72, gold:18, color:'#b0b6c4', color2:'#5a6070', size:0.38, armor:3 },
+  boss:    { name:'BOSS',   hp:620, speed:0.62, gold:120,color:'#ff5c5c', color2:'#7a1f1f', size:0.46, armor:6 }
+};
+/* ---------------- 波次配置 ----------------
+   每波：{ delay: 出怪间隔秒, groups: [{type, count, gap}] }
+--------------------------------------------------- */
+const WAVES = [
+  { delay:0.90, groups:[ {type:'slime', count:6,  gap:0.9} ] },
+  { delay:0.80, groups:[ {type:'slime', count:8,  gap:0.75}, {type:'bat', count:3, gap:1.1} ] },
+  { delay:0.75, groups:[ {type:'bat',   count:8,  gap:0.6} ] },
+  { delay:0.75, groups:[ {type:'slime', count:10, gap:0.6}, {type:'golem', count:2, gap:1.6} ] },
+  { delay:0.70, groups:[ {type:'bat',   count:10, gap:0.55}, {type:'golem', count:3, gap:1.5} ] },
+  { delay:0.65, groups:[ {type:'slime', count:12, gap:0.5}, {type:'golem', count:4, gap:1.4}, {type:'bat', count:6, gap:0.6} ] },
+  { delay:0.60, groups:[ {type:'golem', count:7,  gap:1.1}, {type:'bat', count:10, gap:0.5} ] },
+  { delay:0.55, groups:[ {type:'slime', count:14, gap:0.45}, {type:'golem', count:6, gap:1.2}, {type:'bat', count:8, gap:0.5} ] },
+  { delay:0.50, groups:[ {type:'golem', count:9,  gap:0.95}, {type:'bat', count:12, gap:0.45} ] },
+  { delay:0.45, groups:[ {type:'boss',  count:1,  gap:1.0}, {type:'golem', count:8, gap:1.0}, {type:'bat', count:10, gap:0.45} ] }
+];
+/* ---------------- 全局状态 ---------------- */
+const game = {
+  grid: [],            // 格子类型
+  towers: [],          // 已建塔
+  enemies: [],         // 敌人
+  bullets: [],         // 子弹
+  effects: [],         // 特效（爆炸/光束）
+  gold: 200,
+  life: 20,
+  waveIndex: 0,        // 已完成/正在进行的波次索引
+  spawnQueue: [],      // 待生成敌人队列
+  waveActive: false,
+  running: false,      // 是否已开始
+  paused: false,
+  gameOver: false,
+  win: false,
+  speed: 1,
+  selectedType: null,  // 待建造的塔类型 index
+  sellMode: false,
+  selectedTower: null, // 已选中的塔（用于升级/出售）
+  time: 0,
+  hoverCell: null,
+  msg: ''
+};
+/* ---------------- 路径预处理 ---------------- */
+// 把格子折线转成像素折线，并计算总长度，便于按距离取坐标
+function buildRoutes() {
+  return ROUTES_DEF.map(pts => {
+    const pixelPts = pts.map(p => ({ x: p[0] * CELL + CELL / 2, y: p[1] * CELL + CELL / 2 }));
+    const segs = [];
+    let total = 0;
+    for (let i = 0; i < pixelPts.length - 1; i++) {
+      const a = pixelPts[i], b = pixelPts[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      segs.push({ a, b, len, start: total });
+      total += len;
+    }
+    return { pts: pixelPts, segs, total };
+  });
+}
+const ROUTES = buildRoutes();
+// 根据已走距离取坐标
+function routePos(route, dist) {
+  if (dist <= 0) return { x: route.segs[0].a.x, y: route.segs[0].a.y };
+  for (const s of route.segs) {
+    if (dist <= s.start + s.len) {
+      const t = (dist - s.start) / s.len;
+      return { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t };
+    }
+  }
+  const last = route.segs[route.segs.length - 1];
+  return { x: last.b.x, y: last.b.y };
+}
+/* ---------------- 地图初始化 ---------------- */
+function initGrid() {
+  game.grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) row.push(T_EMPTY);
+    game.grid.push(row);
+  }
+  // 标记路径格（含路径两侧不建造，保证路线通畅）
+  ROUTES_DEF.forEach(pts => {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+      const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+      let x = x1, y = y1;
+      markCell(x, y);
+      while (x !== x2 || y !== y2) {
+        x += dx; y += dy;
+        markCell(x, y);
+      }
+    }
+  });
+  // 装饰障碍（不影响路线，纯视觉 + 阻挡建造）
+  [[0,0],[1,0],[14,0],[15,0],[0,8],[15,8],[0,3],[15,3]].forEach(([c,r]) => {
+    if (inBounds(c,r) && game.grid[r][c] === T_EMPTY) game.grid[r][c] = T_BLOCK;
+  });
+}
+function markCell(c, r) {
+  if (inBounds(c, r)) game.grid[r][c] = T_PATH;
+}
+function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+/* ---------------- 工具函数 ---------------- */
+function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+function cellCenter(c, r) { return { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 }; }
+/* ---------------- 波次系统 ---------------- */
+function startWave() {
+  if (game.waveIndex >= WAVES.length) return;
+  const wave = WAVES[game.waveIndex];
+  game.spawnQueue = [];
+  let t = 0;
+  wave.groups.forEach(g => {
+    for (let i = 0; i < g.count; i++) {
+      game.spawnQueue.push({ type: g.type, time: t });
+      t += g.gap;
+    }
+  });
+  game.spawnQueue.sort((a, b) => a.time - b.time);
+  game.waveTimer = 0;
+  game.waveActive = true;
+  log(`第 ${game.waveIndex + 1} 波来袭！`);
+}
+function updateWave(dt) {
+  if (!game.waveActive) return;
+  game.waveTimer += dt;
+  while (game.spawnQueue.length && game.spawnQueue[0].time <= game.waveTimer) {
+    const item = game.spawnQueue.shift();
+    spawnEnemy(item.type);
+  }
+  if (!game.spawnQueue.length && !game.enemies.length) {
+    // 本波结束
+    game.waveActive = false;
+    game.waveIndex++;
+    const bonus = 20 + game.waveIndex * 6;
+    game.gold += bonus;
+    if (game.waveIndex >= WAVES.length) {
+      game.win = true;
+      game.running = false;
+      showOverlay('🎉 胜利！', `你守住了全部 ${WAVES.length} 波进攻！剩余生命 ${game.life}，金币 ${game.gold}。`);
+    } else {
+      log(`第 ${game.waveIndex} 波已清空，奖励 +${bonus} 金币。点击「开始下一波」继续。`);
+      game.betweenWaves = true;
+    }
+  }
+}
+function spawnEnemy(type) {
+  const base = ENEMY_TYPES[type];
+  const routeIndex = Math.floor(Math.random() * ROUTES.length);
+  const scale = 1 + game.waveIndex * 0.13;   // 波次成长
+  game.enemies.push({
+    type,
+    route: routeIndex,
+    dist: 0,
+    hp: Math.round(base.hp * scale),
+    maxHp: Math.round(base.hp * scale),
+    speed: base.speed,
+    gold: base.gold,
+    armor: base.armor,
+    size: base.size,
+    color: base.color,
+    color2: base.color2,
+    slowT: 0,
+    slowFactor: 1,
+    x: 0, y: 0,
+    hitFlash: 0
+  });
+}
+/* ---------------- 敌人更新 ---------------- */
+function updateEnemies(dt) {
+  for (let i = game.enemies.length - 1; i >= 0; i--) {
+    const e = game.enemies[i];
+    const route = ROUTES[e.route];
+    // 减速处理
+    let sp = e.speed;
+    if (e.slowT > 0) { e.slowT -= dt; sp *= (1 - e.slowFactor); }
+    e.dist += sp * CELL * dt;
+    const p = routePos(route, e.dist);
+    e.x = p.x; e.y = p.y;
+    if (e.hitFlash > 0) e.hitFlash -= dt;
+    // 到达终点
+    if (e.dist >= route.total) {
+      game.enemies.splice(i, 1);
+      game.life -= (e.type === 'boss' ? 5 : 1);
+      addEffect({ kind:'leak', x:e.x, y:e.y, t:0, life:0.5, color:'#ff5c5c' });
+      if (game.life <= 0) {
+        game.life = 0;
+        game.running = false;
+        game.gameOver = true;
+        showOverlay('💀 失败', `基地被攻破了…… 你坚持到了第 ${Math.min(game.waveIndex + 1, WAVES.length)} 波。`);
+      }
+    }
+  }
+}
+/* ---------------- 塔更新 ---------------- */
+function updateTowers(dt) {
+  game.towers.forEach(tw => {
+    tw.cd -= dt;
+    if (tw.cd > 0) return;
+    const def = TOWER_TYPES[tw.type];
+    const rangePx = tw.range * CELL;
+    // 找目标：范围内 dist 最大（最靠前）的敌人
+    let target = null, bestDist = -1;
+    for (const e of game.enemies) {
+      if (dist(tw.x, tw.y, e.x, e.y) <= rangePx) {
+        if (e.dist > bestDist) { bestDist = e.dist; target = e; }
+      }
+    }
+    if (!target) return;
+    tw.cd = def.cd;
+    tw.angle = Math.atan2(target.y - tw.y, target.x - tw.x);
+    tw.recoil = 1;
+    if (def.beam) {
+      // 激光：直线穿透
+      let hits = 0;
+      const dirx = Math.cos(tw.angle), diry = Math.sin(tw.angle);
+      game.enemies.forEach(e => {
+        const vx = e.x - tw.x, vy = e.y - tw.y;
+        const proj = vx * dirx + vy * diry;
+        if (proj < 0 || proj > rangePx) return;
+        const perp = Math.abs(vx * diry - vy * dirx);
+        if (perp < 18) { damageEnemy(e, tw.dmg); hits++; }
+      });
+      addEffect({ kind:'beam', x:tw.x, y:tw.y, x2:tw.x + dirx * rangePx, y2:tw.y + diry * rangePx, t:0, life:0.16, color:def.color });
+    } else {
+      game.bullets.push({
+        x: tw.x, y: tw.y,
+        target,
+        speed: def.bullet * CELL,
+        dmg: tw.dmg,
+        color: def.bulletColor,
+        splash: def.splash || 0,
+        slow: def.slow || 0,
+        slowTime: def.slowTime || 0,
+        life: 2.4
+      });
+    }
+  });
+}
+function damageEnemy(e, dmg) {
+  const real = Math.max(1, dmg - e.armor);
+  e.hp -= real;
+  e.hitFlash = 0.12;
+  if (e.hp <= 0) {
+    const idx = game.enemies.indexOf(e);
+    if (idx >= 0) {
+      game.enemies.splice(idx, 1);
+      game.gold += e.gold;
+      addEffect({ kind:'pop', x:e.x, y:e.y, t:0, life:0.35, color:e.color });
+    }
+  }
+}
+/* ---------------- 子弹更新 ---------------- */
+function updateBullets(dt) {
+  for (let i = game.bullets.length - 1; i >= 0; i--) {
+    const b = game.bullets[i];
+    b.life -= dt;
+    if (b.life <= 0) { game.bullets.splice(i, 1); continue; }
+    // 目标已死则飞向最后位置
+    if (!b.target || game.enemies.indexOf(b.target) < 0) {
+      game.bullets.splice(i, 1);
+      continue;
+    }
+    const tx = b.target.x, ty = b.target.y;
+    const d = dist(b.x, b.y, tx, ty);
+    const step = b.speed * dt;
+    if (d <= step + 6) {
+      // 命中
+      if (b.splash > 0) {
+        addEffect({ kind:'boom', x:tx, y:ty, t:0, life:0.3, color:b.color, r:b.splash * CELL });
+        game.enemies.forEach(e => {
+          if (dist(tx, ty, e.x, e.y) <= b.splash * CELL) damageEnemy(e, b.dmg);
+        });
+      } else {
+        damageEnemy(b.target, b.dmg);
+        if (b.slow > 0) {
+          b.target.slowT = b.slowTime;
+          b.target.slowFactor = b.slow;
+        }
+      }
+      game.bullets.splice(i, 1);
+      continue;
+    }
+    b.x += (tx - b.x) / d * step;
+    b.y += (ty - b.y) / d * step;
+  }
+}
+/* ---------------- 特效 ---------------- */
+function addEffect(e) { game.effects.push(e); }
+function updateEffects(dt) {
+  for (let i = game.effects.length - 1; i >= 0; i--) {
+    const f = game.effects[i];
+    f.t += dt;
+    if (f.t >= f.life) game.effects.splice(i, 1);
+  }
+}
+/* ---------------- 主循环 ---------------- */
+let lastTime = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  if (!lastTime) lastTime = ts;
+  let dt = (ts - lastTime) / 1000;
+  lastTime = ts;
+  if (dt > 0.1) dt = 0.1;   // 防止切后台后跳帧
+  if (game.running && !game.paused && !game.gameOver && !game.win) {
+    const step = dt * game.speed;
+    game.time += step;
+    updateWave(step);
+    updateEnemies(step);
+    updateTowers(step);
+    updateBullets(step);
+    updateEffects(step);
+    if (game.betweenWaves) {
+      // 波次间隔自动倒计时后自动开波（也支持手动提前）
+      game.betweenTimer = (game.betweenTimer || 0) + step;
+      if (game.betweenTimer >= 6) {
+        game.betweenTimer = 0;
+        game.betweenWaves = false;
+        startWave();
+      }
+    }
+  } else {
+    updateEffects(dt);
+  }
+  render();
+  updateHUD();
+}
+/* ---------------- 渲染 ---------------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+function render() {
+  // 背景
+  ctx.fillStyle = '#1b2030';
+  ctx.fillRect(0, 0, W, H);
+  // 格子
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const t = game.grid[r][c];
+      const x = c * CELL, y = r * CELL;
+      if (t === T_PATH) {
+        ctx.fillStyle = '#3a3226';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = '#463c2c';
+        ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
+      } else if (t === T_BLOCK) {
+        ctx.fillStyle = '#232838';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = '#2f3648';
+        ctx.fillRect(x + 8, y + 8, CELL - 16, CELL - 16);
+      } else {
+        // 草地：像素棋盘格
+        const even = (c + r) % 2 === 0;
+        ctx.fillStyle = even ? '#20402a' : '#1d3a26';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = even ? '#2a5233' : '#26492e';
+        ctx.fillRect(x + 6, y + 6, 6, 6);
+        ctx.fillRect(x + CELL - 14, y + CELL - 14, 6, 6);
+      }
+    }
+  }
+  // 路线指引（淡淡的箭头）
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = '#ffe08a';
+  ctx.lineWidth = 3;
+  ROUTES.forEach(rt => {
+    ctx.beginPath();
+    ctx.moveTo(rt.pts[0].x, rt.pts[0].y);
+    for (let i = 1; i < rt.pts.length; i++) ctx.lineTo(rt.pts[i].x, rt.pts[i].y);
+    ctx.stroke();
+  });
+  ctx.restore();
+  // 基地
+  drawBase();
+  // 建造预览
+  if (game.hoverCell && game.selectedType !== null) {
+    const [c, r] = game.hoverCell;
+    if (inBounds(c, r)) {
+      const ok = canBuild(c, r);
+      const def = TOWER_TYPES[game.selectedType];
+      const rangePx = def.range * CELL;
+      const cc = cellCenter(c, r);
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = ok ? '#7ee081' : '#ff5c5c';
+      ctx.beginPath();
+      ctx.arc(cc.x, cc.y, rangePx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = ok ? '#7ee081' : '#ff5c5c';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(c * CELL + 2, r * CELL + 2, CELL - 4, CELL - 4);
+    }
+  }
+  // 已选中的塔范围
+  if (game.selectedTower) {
+    const tw = game.selectedTower;
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(tw.x, tw.y, tw.range * CELL, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tw.c * CELL + 2, tw.r * CELL + 2, CELL - 4, CELL - 4);
+  }
+  // 塔
+  game.towers.forEach(drawTower);
+  // 敌人
+  game.enemies.forEach(drawEnemy);
+  // 子弹
+  game.bullets.forEach(b => {
+    ctx.fillStyle = b.color;
+    ctx.fillRect(Math.round(b.x - 3), Math.round(b.y - 3), 6, 6);
+  });
+  // 特效
+  game.effects.forEach(f => {
+    const k = f.t / f.life;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    if (f.kind === 'boom') {
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r * (0.4 + k * 0.9), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (f.kind === 'beam') {
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 5 * (1 - k) + 1;
+      ctx.beginPath();
+      ctx.moveTo(f.x, f.y); ctx.lineTo(f.x2, f.y2);
+      ctx.stroke();
+    } else if (f.kind === 'pop') {
+      ctx.fillStyle = f.color;
+      const s = 6 + k * 14;
+      ctx.fillRect(f.x - s / 2, f.y - s / 2, s, s);
+    } else if (f.kind === 'leak') {
+      ctx.fillStyle = f.color;
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText('-1', f.x - 10, f.y - k * 20);
+    }
+    ctx.restore();
+  });
+  // 暂停遮罩
+  if (game.paused && game.running) {
+    ctx.fillStyle = 'rgba(10,12,18,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#e8e8f0';
+    ctx.font = 'bold 34px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('已暂停', W / 2, H / 2);
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#b9c0d4';
+    ctx.fillText('按空格继续', W / 2, H / 2 + 30);
+    ctx.textAlign = 'left';
+  }
+  // 未开始提示
+  if (!game.running && !game.gameOver && !game.win) {
+    ctx.fillStyle = 'rgba(10,12,18,0.45)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#7ee081';
+    ctx.font = 'bold 26px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('点击「开始游戏」布防', W / 2, H / 2);
+    ctx.textAlign = 'left';
+  }
+}
+function drawBase() {
+  const x = COLS * CELL - CELL, y = 3 * CELL;
+  ctx.fillStyle = '#4a5470';
+  ctx.fillRect(x + 6, y + 6, CELL - 12, CELL * 3 - 12);
+  ctx.fillStyle = '#6a7699';
+  ctx.fillRect(x + 12, y + 12, CELL - 24, CELL * 3 - 24);
+  ctx.fillStyle = '#ffd166';
+  ctx.fillRect(x + 22, y + 34, 16, 16);
+  ctx.fillStyle = '#ff5c5c';
+  ctx.fillRect(x + 22, y + 70, 16, 16);
+  ctx.fillStyle = '#7ee081';
+  ctx.fillRect(x + 22, y + 106, 16, 16);
+}
+function drawTower(tw) {
+  const def = TOWER_TYPES[tw.type];
+  const x = tw.c * CELL, y = tw.r * CELL;
+  // 底座
+  ctx.fillStyle = '#2a3040';
+  ctx.fillRect(x + 6, y + 6, CELL - 12, CELL - 12);
+  ctx.fillStyle = def.color2;
+  ctx.fillRect(x + 10, y + 10, CELL - 20, CELL - 20);
+  // 塔身
+  ctx.fillStyle = def.color;
+  ctx.fillRect(x + 18, y + 18, CELL - 36, CELL - 36);
+  // 炮口方向
+  const ang = tw.angle || 0;
+  const cx = x + CELL / 2, cy = y + CELL / 2;
+  const recoil = tw.recoil > 0 ? 3 : 0;
+  if (tw.recoil > 0) tw.recoil -= 0.08;
+  const bx = cx + Math.cos(ang) * (14 - recoil);
+  const by = cy + Math.sin(ang) * (14 - recoil);
+  ctx.fillStyle = '#14161f';
+  ctx.fillRect(bx - 5, by - 5, 10, 10);
+  // 等级标记
+  if (tw.level > 1) {
+    ctx.fillStyle = '#ffd166';
+    for (let i = 0; i < tw.level - 1; i++) {
+      ctx.fillRect(x + 8 + i * 7, y + 6, 5, 5);
+    }
+  }
+}
+function drawEnemy(e) {
+  const s = e.size * CELL;
+  const x = Math.round(e.x - s / 2);
+  const y = Math.round(e.y - s / 2);
+  const flash = e.hitFlash > 0;
+  ctx.fillStyle = flash ? '#ffffff' : e.color2;
+  ctx.fillRect(x - 2, y - 2, s + 4, s + 4);
+  ctx.fillStyle = flash ? '#ffffff' : e.color;
+  ctx.fillRect(x, y, s, s);
+  // 眼睛（像素点）
+  ctx.fillStyle = '#14161f';
+  ctx.fillRect(x + s * 0.22, y + s * 0.28, s * 0.16, s * 0.16);
+  ctx.fillRect(x + s * 0.62, y + s * 0.28, s * 0.16, s * 0.16);
+  // 血条
+  if (e.hp < e.maxHp) {
+    const bw = s + 8;
+    const bx = e.x - bw / 2, by = y - 9;
+    ctx.fillStyle = '#14161f';
+    ctx.fillRect(bx, by, bw, 5);
+    ctx.fillStyle = e.hp / e.maxHp > 0.5 ? '#7ee081' : (e.hp / e.maxHp > 0.22 ? '#ffd166' : '#ff5c5c');
+    ctx.fillRect(bx + 1, by + 1, (bw - 2) * Math.max(0, e.hp / e.maxHp), 3);
+  }
+  // 减速标记
+  if (e.slowT > 0) {
+    ctx.fillStyle = '#6ec6ff';
+    ctx.fillRect(x + s / 2 - 3, y - 16, 6, 6);
+  }
+}
+/* ---------------- HUD ---------------- */
+const uiGold = document.getElementById('uiGold');
+const uiLife = document.getElementById('uiLife');
+const uiWave = document.getElementById('uiWave');
+const uiLeft = document.getElementById('uiLeft');
+const uiTowers = document.getElementById('uiTowers');
+const logEl = document.getElementById('log');
+function updateHUD() {
+  uiGold.textContent = game.gold;
+  uiLife.textContent = game.life;
+  uiWave.textContent = `${Math.min(game.waveIndex + (game.waveActive ? 1 : 0), WAVES.length)}/${WAVES.length}`;
+  uiLeft.textContent = game.enemies.length + game.spawnQueue.length;
+  uiTowers.textContent = game.towers.length;
+  // 塔卡片可用状态
+  document.querySelectorAll('.tcard').forEach((el, i) => {
+    const def = TOWER_TYPES[i];
+    el.classList.toggle('dis', game.gold < def.cost);
+    el.classList.toggle('sel', game.selectedType === i);
+  });
+}
+function log(msg) { game.msg = msg; logEl.textContent = msg; }
+/* ---------------- 交互 ---------------- */
+function canBuild(c, r) {
+  if (!inBounds(c, r)) return false;
+  if (game.grid[r][c] !== T_EMPTY) return false;
+  if (game.towers.some(t => t.c === c && t.r === r)) return false;
+  return true;
+}
+function buildTower(c, r, typeIndex) {
+  const def = TOWER_TYPES[typeIndex];
+  if (game.gold < def.cost) { log('金币不足，无法建造。'); return false; }
+  if (!canBuild(c, r)) { log('这里不能建造（路径或已有建筑）。'); return false; }
+  game.gold -= def.cost;
+  const cc = cellCenter(c, r);
+  game.towers.push({
+    c, r, x: cc.x, y: cc.y,
+    type: typeIndex,
+    level: 1,
+    dmg: def.dmg,
+    range: def.range,
+    cd: 0,
+    angle: 0,
+    recoil: 0
+  });
+  log(`建造了 ${def.name}（-${def.cost} 金币）。`);
+  return true;
+}
+function upgradeCost(tw) {
+  const def = TOWER_TYPES[tw.type];
+  return Math.round(def.cost * (0.75 + tw.level * 0.55));
+}
+function upgradeTower(tw) {
+  if (tw.level >= 5) { log('该塔已满级。'); return; }
+  const cost = upgradeCost(tw);
+  if (game.gold < cost) { log(`升级需要 ${cost} 金币，金币不足。`); return; }
+  game.gold -= cost;
+  tw.level++;
+  tw.dmg = Math.round(tw.dmg * 1.42);
+  tw.range = +(tw.range * 1.10).toFixed(2);
+  log(`升级成功！当前等级 ${tw.level}，攻击 ${tw.dmg}，射程 ${tw.range.toFixed(1)} 格。`);
+}
+function sellTower(tw) {
+  const def = TOWER_TYPES[tw.type];
+  let invested = def.cost;
+  let lv = tw.level;
+  for (let i = 1; i < lv; i++) invested += Math.round(def.cost * (0.75 + i * 0.55));
+  const back = Math.round(invested * 0.6);
+  game.gold += back;
+  const idx = game.towers.indexOf(tw);
+  if (idx >= 0) game.towers.splice(idx, 1);
+  game.selectedTower = null;
+  log(`已出售，返还 ${back} 金币。`);
+}
+/* 鼠标事件 */
+function canvasPos(ev) {
+  const rect = cv.getBoundingClientRect();
+  const scaleX = cv.width / rect.width;
+  const scaleY = cv.height / rect.height;
+  const cx = (ev.clientX - rect.left) * scaleX;
+  const cy = (ev.clientY - rect.top) * scaleY;
+  return { x: cx, y: cy, c: Math.floor(cx / CELL), r: Math.floor(cy / CELL) };
+}
+cv.addEventListener('mousemove', ev => {
+  const p = canvasPos(ev);
+  game.hoverCell = [p.c, p.r];
+});
+cv.addEventListener('mouseleave', () => { game.hoverCell = null; });
+cv.addEventListener('click', ev => {
+  const p = canvasPos(ev);
+  const c = p.c, r = p.r;
+  if (!inBounds(c, r)) return;
+  // 出售模式
+  if (game.sellMode) {
+    const tw = game.towers.find(t => t.c === c && t.r === r);
+    if (tw) sellTower(tw);
+    else log('这里没有可出售的塔。');
+    return;
+  }
+  // 点击已有塔 → 选中
+  const exist = game.towers.find(t => t.c === c && t.r === r);
+  if (exist) {
+    game.selectedTower = exist;
+    game.selectedType = null;
+    log(`${TOWER_TYPES[exist.type].name} Lv.${exist.level} ｜ 攻击 ${exist.dmg} ｜ 射程 ${exist.range.toFixed(1)} 格 ｜ 升级需 ${upgradeCost(exist)} 金币（按 U 升级 / X 出售）`);
+    return;
+  }
+  // 建造
+  if (game.selectedType !== null) {
+    if (buildTower(c, r, game.selectedType)) {
+      game.selectedTower = null;
+    }
+  } else {
+    game.selectedTower = null;
+  }
+});
+/* 键盘事件 */
+window.addEventListener('keydown', ev => {
+  if (ev.code === 'Space') {
+    ev.preventDefault();
+    if (game.running && !game.gameOver && !game.win) {
+      game.paused = !game.paused;
+      log(game.paused ? '已暂停（空格继续）' : '继续游戏');
+    }
+    return;
+  }
+  if (ev.key >= '1' && ev.key <= '4') {
+    const i = parseInt(ev.key, 10) - 1;
+    if (i < TOWER_TYPES.length) selectTowerType(i);
+    return;
+  }
+  if (ev.key === 'u' || ev.key === 'U') {
+    if (game.selectedTower) upgradeTower(game.selectedTower);
+    return;
+  }
+  if (ev.key === 'x' || ev.key === 'X') {
+    if (game.selectedTower) sellTower(game.selectedTower);
+    return;
+  }
+  if (ev.key === 'Escape') {
+    game.selectedType = null;
+    game.selectedTower = null;
+    game.sellMode = false;
+  }
+});
+/* ---------------- 塔卡片 UI ---------------- */
+function buildTowerBar() {
+  const bar = document.getElementById('towerBar');
+  bar.innerHTML = '';
+  TOWER_TYPES.forEach((def, i) => {
+    const card = document.createElement('div');
+    card.className = 'tcard';
+    card.innerHTML = `
+      <canvas width="48" height="48"></canvas>
+      <div class="tname" style="color:${def.color}">${def.name} <span style="color:#98a0b8;font-size:11px">[${i + 1}]</span></div>
+      <div class="tcost">💰 ${def.cost}</div>
+      <div class="tdesc">${def.desc}<br>伤害 ${def.dmg} · 射程 ${def.range}格</div>
+    `;
+    // 画个小图标
+    const c2 = card.querySelector('canvas').getContext('2d');
+    c2.fillStyle = def.color2; c2.fillRect(6, 6, 36, 36);
+    c2.fillStyle = def.color; c2.fillRect(14, 14, 20, 20);
+    c2.fillStyle = '#14161f'; c2.fillRect(20, 20, 8, 8);
+    card.addEventListener('click', () => selectTowerType(i));
+    bar.appendChild(card);
+  });
+}
+function selectTowerType(i) {
+  if (game.gold < TOWER_TYPES[i].cost) {
+    log(`${TOWER_TYPES[i].name} 需要 ${TOWER_TYPES[i].cost} 金币，金币不足。`);
+    return;
+  }
+  game.selectedType = (game.selectedType === i) ? null : i;
+  game.selectedTower = null;
+  game.sellMode = false;
+  log(game.selectedType === null ? '已取消选择。' : `已选择 ${TOWER_TYPES[i].name}，点击地图草地建造。`);
+}
+/* ---------------- 覆盖层 ---------------- */
+const overlay = document.getElementById('overlay');
+const ovTitle = document.getElementById('ovTitle');
+const ovText = document.getElementById('ovText');
+const ctrl2 = document.getElementById('ctrl2');
+function showOverlay(title, text, buttons) {
+  ovTitle.textContent = title;
+  ovText.textContent = text;
+  ctrl2.innerHTML = '';
+  (buttons || []).forEach(b => {
+    const btn = document.createElement('button');
+    btn.textContent = b.label;
+    btn.onclick = b.onClick;
+    ctrl2.appendChild(btn);
+  });
+  overlay.classList.add('show');
+}
+function hideOverlay() { overlay.classList.remove('show'); }
+/* ---------------- 控制按钮 ---------------- */
+const btnStart = document.getElementById('btnStart');
+const btnNext = document.getElementById('btnNext');
+const btnSell = document.getElementById('btnSell');
+const btnSpeed = document.getElementById('btnSpeed');
+const btnRestart = document.getElementById('btnRestart');
+btnStart.addEventListener('click', () => {
+  if (game.gameOver || game.win) return;
+  if (!game.running) {
+    game.running = true;
+    game.paused = false;
+    hideOverlay();
+    if (!game.waveActive && game.waveIndex < WAVES.length) startWave();
+    log('游戏开始！守住基地吧。');
+  }
+});
+btnNext.addEventListener('click', () => {
+  if (!game.running || game.gameOver || game.win) { log('请先开始游戏。'); return; }
+  if (game.waveActive) { log('当前波次尚未结束。'); return; }
+  if (game.waveIndex >= WAVES.length) { log('已是最后一波。'); return; }
+  game.betweenWaves = false;
+  game.betweenTimer = 0;
+  startWave();
+});
+btnSell.addEventListener('click', () => {
+  game.sellMode = !game.sellMode;
+  game.selectedType = null;
+  game.selectedTower = null;
+  btnSell.textContent = game.sellMode ? '🗑 出售模式(开)' : '🗑 出售模式';
+  log(game.sellMode ? '出售模式：点击已建塔可返还 60% 金币。' : '已退出出售模式。');
+});
+btnSpeed.addEventListener('click', () => {
+  game.speed = game.speed === 1 ? 2 : (game.speed === 2 ? 3 : 1);
+  btnSpeed.textContent = `⏩ 速度 x${game.speed}`;
+});
+btnRestart.addEventListener('click', () => restart());
+function restart() {
+  game.grid = [];
+  game.towers = [];
+  game.enemies = [];
+  game.bullets = [];
+  game.effects = [];
+  game.gold = 200;
+  game.life = 20;
+  game.waveIndex = 0;
+  game.spawnQueue = [];
+  game.waveActive = false;
+  game.running = false;
+  game.paused = false;
+  game.gameOver = false;
+  game.win = false;
+  game.speed = 1;
+  game.selectedType = null;
+  game.sellMode = false;
+  game.selectedTower = null;
+  game.betweenWaves = false;
+  game.betweenTimer = 0;
+  btnSpeed.textContent = '⏩ 速度 x1';
+  btnSell.textContent = '🗑 出售模式';
+  hideOverlay();
+  initGrid();
+  log('已重置，点击「开始游戏」重新挑战。');
+}
+/* ---------------- 启动 ---------------- */
+initGrid();
+buildTowerBar();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

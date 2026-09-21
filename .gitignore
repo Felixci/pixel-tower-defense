@@ -1,0 +1,7 @@
+tools/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+task.log
+events.journal*
